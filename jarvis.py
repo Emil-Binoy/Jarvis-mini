@@ -7,6 +7,7 @@ import json
 import ollama
 import time
 import math
+import datetime
 import re
 import tkinter as tk
 from threading import Thread
@@ -15,71 +16,48 @@ from AppOpener import close as close_app
 
 # --- UI Window Configuration ---
 root = tk.Tk()
-root.title("JARVIS Core")
-root.geometry("400x400")
-root.configure(bg="#05050a")
-root.attributes("-topmost", True)  # Keeps Jarvis on top of other windows
+root.title("JARVIS Taskbar Core")
 
-# Create canvas for drawing the neon audio rings
-canvas = tk.Canvas(root, width=400, height=400, bg="#05050a", highlightthickness=0)
-canvas.pack()
+# 1. Strip away all borders, title bars, and window buttons cleanly
+root.overrideredirect(True)
+
+# 2. Force the accent bar to always stay on top of open application frames
+root.attributes("-topmost", True)
+
+# 3. Detect screen geometry metrics dynamically
+screen_width = root.winfo_screenwidth()
+screen_height = root.winfo_screenheight()
+
+# Set bar height profile (4px) and line it up perfectly right above the default taskbar edge
+bar_height = 4
+y_position = screen_height - bar_height - 55  # Adjust the '40' offset if your taskbar is thinner/thicker
+
+root.geometry(f"{screen_width}x{bar_height}+0+{y_position}")
+
+# Create canvas for drawing the flat neon audio strip
+canvas = tk.Canvas(root, width=screen_width, height=bar_height, bg="#05050a", highlightthickness=0)
+canvas.pack(fill="both", expand=True)
 
 # Visual state control variables
 is_talking = False
-animation_angle = 0
 
 def draw_jarvis_core():
-    """Draws and animates the sci-fi ring interface based on speech states"""
-    global animation_angle, is_talking
+    """Draws and animates the thin taskbar line based on speech engine states"""
+    global is_talking
     canvas.delete("all")
     
-    center_x, center_y = 200, 200
-    base_radius = 80
-    
-    # Calculate dynamic pulsing metrics if speaking
     if is_talking:
-        pulse = math.sin(time.time() * 15) * 15
-        radius = base_radius + pulse
+        # Pulses bright cyberpunk neon cyan/purple when speaking
+        pulse = abs(math.sin(time.time() * 12))
+        # Smoothly interpolates lighting values to simulate breathing energy
+        green_blue_glow = f"#{int(0 + (100 * pulse)):02x}f0ff"
+        canvas.create_rectangle(0, 0, screen_width, bar_height, fill=green_blue_glow, outline="")
     else:
-        radius = base_radius
-
-    # 1. Outer Static Tech Ring
-    canvas.create_oval(center_x - 110, center_y - 110, center_x + 110, center_y + 110, 
-                       outline="#102030", width=2, dash=(10, 15))
-    
-    # 2. Glowing Audio/Status Ring
-    color = "#00f0ff" if is_talking else "#005577"
-    glow_width = 5 if is_talking else 2
-    
-    canvas.create_oval(center_x - radius, center_y - radius, center_x + radius, center_y + radius, 
-                       outline=color, width=glow_width)
-    
-    # 3. Rotating Core Segments (Arc Reactor style)
-    if is_talking:
-        animation_angle += 5
-    else:
-        animation_angle += 0.5
+        # Dims down to a calm, deep stealth blue line when waiting in standby
+        canvas.create_rectangle(0, 0, screen_width, bar_height, fill="#003344", outline="")
         
-    for i in range(8):
-        angle_offset = i * 45 + animation_angle
-        rad_start = math.radians(angle_offset)
-        rad_end = math.radians(angle_offset + 25)
-        
-        # Inner Dash Segments
-        x1 = center_x + (radius - 20) * math.cos(rad_start)
-        y1 = center_y + (radius - 20) * math.sin(rad_start)
-        x2 = center_x + (radius - 20) * math.cos(rad_end)
-        y2 = center_y + (radius - 20) * math.sin(rad_end)
-        canvas.create_line(x1, y1, x2, y2, fill=color, width=3)
-
-    # 4. Center Core Glow Node
-    node_radius = 15 if is_talking else 10
-    canvas.create_oval(center_x - node_radius, center_y - node_radius, 
-                       center_x + node_radius, center_y + node_radius, 
-                       fill=color, outline="")
-
-    # Continuous loop render trigger
-    root.after(20, draw_jarvis_core)
+    # Standard frame loop update cadence
+    root.after(30, draw_jarvis_core)
 
 # --- Core Voice Engine Logic ---
 def speak(text):
@@ -125,15 +103,17 @@ def listen_command():
 def ask_jarvis_brain(user_query):
     """Uses local Ollama model to break down your sentence into explicit actions"""
     system_prompt = (
-        "You are the brain of a voice assistant. Analyze the user's request. "
-        "Respond ONLY with a JSON object containing 'action' and 'target'.\n\n"
-        "RULES:\n"
-        "1. If the user explicitly names a song title or artist to play (e.g., 'play darkside'), use action 'play_specific'.\n"
-        "2. If they say 'play music' or 'resume music', use action 'play_song'.\n"
-        "3. If they say 'stop the music', 'stop it', or 'pause', use action 'pause_song'.\n"
-        "4. If they say 'next song' or 'skip', use action 'next_song'.\n"
-        "5. If they say 'previous song' or 'go back', use action 'prev_song'.\n\n"
-        "Allowed actions: 'open_app', 'close_app', 'open_web', 'play_song', 'play_specific', 'pause_song', 'next_song', 'prev_song', 'exit', 'chat'\n"
+        "You are the executive brain of an autonomous AI Agent named Jarvis. Analyze the request.\n"
+        "Respond ONLY with a JSON object containing 'action' and 'target'. Do not include any extra text.\n\n"
+        "RULES & CRITICAL MAPPINGS:\n"
+        "1. If the user wants a screenshot, photo of screen, or to capture the screen, use action 'take_screenshot' and target 'none'.\n"
+        "2. If the user wants to change volume, increase volume, make it louder, use 'volume_up'. If quieter or decrease, use 'volume_down'. Target is always 'none'.\n"
+        "3. If the user wants to adjust brightness higher, use 'brightness_up'. If lower, use 'brightness_down'. Target is always 'none'.\n"
+        "4. If the user wants to find, locate, or open a file they forgot, use action 'find_file' and make the filename the target.\n"
+        "5. If the user wants to send a WhatsApp message, use action 'send_message' and format the target as 'NameOrNumber:Message'.\n"
+        "6. If explicitly naming a music track to play, use action 'play_specific'.\n"
+        "7. Generic music controls: 'play music' -> 'play_song', 'stop music' -> 'pause_song', 'next' -> 'next_song', 'back' -> 'prev_song'.\n\n"
+        "Allowed actions: 'open_app', 'close_app', 'open_web', 'play_song', 'play_specific', 'pause_song', 'next_song', 'prev_song', 'find_file', 'send_message', 'take_screenshot', 'volume_up', 'volume_down', 'brightness_up', 'brightness_down', 'exit', 'chat'\n"
     )
 
     try:
@@ -194,12 +174,12 @@ def main_assistant_loop():
             try:
                 import pyautogui
                 open_app("spotify", match_closest=True)
-                time.sleep(2.5)
-                pyautogui.hotkey('ctrl', 'l')
+                time.sleep(1.5)
+                pyautogui.hotkey('ctrl', 'k')
                 time.sleep(0.5)
                 pyautogui.write(target, interval=0.05)
                 time.sleep(1.5)
-                for _ in range(5):
+                for _ in range(4):
                     pyautogui.press('down')
                     time.sleep(0.1)
                 pyautogui.press('enter')
@@ -233,6 +213,56 @@ def main_assistant_loop():
             except:
                 speak("I couldn't skip backward.")
 
+        elif action == "take_screenshot":
+            speak("Capturing screen frame, sir.")
+            try:
+                import pyautogui
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"Screenshot_{timestamp}.png"
+                
+                # Takes a snapshot image and writes it directly to your project root folder
+                screenshot = pyautogui.screenshot()
+                screenshot.save(filename)
+                speak(f"Screenshot successfully logged as {filename}.")
+            except Exception as e:
+                speak("I failed to capture the display image array.")
+
+        # --- System Master Volume Hotkeys ---
+        elif action == "volume_up":
+            speak("Increasing master volume level, sir.")
+            try:
+                import pyautogui
+                for _ in range(5):
+                    pyautogui.press("volumeup")
+            except: speak("I couldn't modify the master audio gain.")
+
+        elif action == "volume_down":
+            speak("Lowering audio volume level, sir.")
+            try:
+                import pyautogui
+                for _ in range(5):
+                    pyautogui.press("volumedown")
+            except: speak("I couldn't adjust the master audio attenuation.")
+
+        # --- Laptop Monitor Brightness Hotkeys ---
+        elif action == "brightness_up":
+            speak("Bumping display panel brightness, sir.")
+            try:
+                import pyautogui
+                for _ in range(4):
+                    pyautogui.press("brightnessup")
+            except:
+                speak("Hardware display panel modifications are currently restricted.")
+
+        elif action == "brightness_down":
+            speak("Dimming display panel brightness, sir.")
+            try:
+                import pyautogui
+                for _ in range(4):
+                    pyautogui.press("brightnessdown")
+            except:
+                speak("Hardware display panel modifications are currently restricted.")
+
         # 8. Dynamic Web Opener
         elif action == "open_web":
             speak(f"Navigating to {target}.")
@@ -244,7 +274,7 @@ def main_assistant_loop():
             root.destroy() 
             sys.exit()
             
-        # 🔥 10. OPTIMIZED: Streaming Fallback Chat Mode
+        # 10. OPTIMIZED: Streaming Fallback Chat Mode
         else:
             try:
                 chat_prompt = (
@@ -254,7 +284,6 @@ def main_assistant_loop():
                     "Do NOT use bullet points, lists, dashes, or emojis. Output only plain spoken English."
                 )
                 
-                # Turn on streaming behavior at the local model runner context level
                 response_stream = ollama.chat(
                     model='gemma2:2b', 
                     messages=[
@@ -271,16 +300,13 @@ def main_assistant_loop():
                     token = chunk['message']['content']
                     sentence_buffer += token
                     
-                    # If the model completes a clean punctuation thought, vocalize it instantly
                     if any(punc in token for punc in ['.', '!', '?']):
-                        # Clear unwanted artifacts out of the working buffer segment
                         clean_segment = sentence_buffer.replace("*", "").replace("-", "")
                         clean_segment = re.sub(r'[^\w\s\d.,!?\']', '', clean_segment).strip()
                         
                         if clean_segment:
                             print(clean_segment, end=" ", flush=True)
                             
-                            # Trigger speech execution on the active thread worker loop
                             global is_talking
                             is_talking = True
                             engine = pyttsx3.init()
@@ -289,8 +315,8 @@ def main_assistant_loop():
                             engine.stop()
                             is_talking = False
                             
-                        sentence_buffer = "" # Flush the buffer segment
-                print() # New line in console terminal
+                        sentence_buffer = "" 
+                print() 
                 
             except Exception as e:
                 print(f"Chat Error: {e}")
